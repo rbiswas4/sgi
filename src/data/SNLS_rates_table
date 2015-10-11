@@ -1,0 +1,13 @@
+# Taken from source files of http://arxiv.org/pdf/1206.0665v1.pdf, and substitutions from vim to remove errors and other hard to read latex characters
+vol,Nobs,Nspec,rmeas,rprimemeas,z,volrate
+17.3,4,3,0.21,NULL,0.16,0.14
+42.8,16,16,0.30,NULL,0.26,0.28
+75.7,31,24,0.35,NULL,0.35,0.36
+112.7,42,29,0.36,NULL,0.45,0.36
+151.5,72,47,0.48,NULL,0.55,0.48
+190.1,91,36,0.55,0.570.06,0.65,0.48
+227.2,110,56,0.59,0.570.06,0.75,0.58
+262.1,128,44,0.64,0.650.06,0.85,0.57
+294.1,141,25,1.20,0.990.29,0.95,0.77
+323.0,50,6,0.93,0.510.26,1.05,0.74
+
