@@ -4,86 +4,68 @@ each object in an ordered list of objects
 - Such that we can access the list of random numbers associated with the ith object quickly
 - with small (preferably no) storage involved
 - when the number of objects is very large (N ~ 2e10)
+- While we can assume some spatial properties of the object indices, we would like this to be either independent of the details of how the object indices are assigned, or at least  easily extensible to other procedures of object index assignments.
 
 To clarify, consider an example:
 object  randomNumbers ~U(0,1)
-0        (x00, x01, x02, x03, ..., x020)
-1        (x10, x11, x12, x13, ..., x120)
+
+- 0        (x00, x01, x02, x03, ..., x020)
+- 1        (x10, x11, x12, x13, ..., x120)
 ....
-i        (xi0, xi1, xi2, xi3, ..., xi20)
+- i        (xi0, xi1, xi2, xi3, ..., xi20)
 ...
-N        (xN0, xN1, xN2, xN3, ..., xN20)
+- N        (xN0, xN1, xN2, xN3, ..., xN20)
 
 We want an approach where we can find the random (xi0, xi1, xi3,...xi20)
-easily without storing them, irrespective of the location of i.
-## Approach 1:
-Use the index of the objects as seeds 
-Problems with using the galtileIds to seed a PNRG
+easily without storing them, irrespective of the value of i.
 
-- The main mundane problem we cannot get around is that our galtileId values exceed the size of the maximum
- seed allowed on the PRNG in python (a 32 bit mersenne twister). This maximum value is set by this 32 bit character
-of the PRNG and is therefore 2^32 -1= 4294967295 ~ 4.2 e9  while the number of galaxies is of the order of
-2.0 e7 * 2.5e3 ~5. e10.  So, we cannot seed the PNRG with a galtileID. (Incidentally, I also better understand something
-we have discussed but though irrelevant why we are not supposed to use different IDs as seeds. and on both counts  I think we need to change methods)
+I tried to build this example in a generic language for everyone, but more specifically what is of interest right now are galaxies (corresponding to objects above) in the LSST simulation database. These are indexed by a unique ID
+called galtileID, which is currently built from an ID identifying the tile of space containing the location of the galaxy, and the id corresponding particular galaxy in a base catalog.
 
-## Options
-- We have options of moving to a different PNRG method: like the 64 bit Mersenne Twister, where the limit on the seed will  be 2^64 -1  or some other method which allows a larger seed. This has the practical difficulty of having to lose the nice
-functionalities numpy is providing us right now,  since numpy does not provide a way to switch generators. One way to
-get some of the nice functionalities without implementing out own generator is to use Boost which supplies a number of
-PNRG implementations. I also think that  it is simply better to actually do the random number generation in the way these
-generators are meant to be used, even if we change the PNRG.
-- So, I think we should try to record the state of the PNRG, whether or not we change the PNRG .
+## Approach 1: Use the index of the objects as seeds.
+In the above example the index is the first column (object). You could imagine seeding the random number generator with these index values, and draw the 20 random numbers corresponding to these objects.
 
- This  would mean starting off with a single seed of our choice, going through our fields one galaxy at a time and drawing a certain number
-of random numbers for each galaxy and recording the state of the PNRG as soon as we move to a new galaxy. Schematically,
-we are talking about storing
+### pros:
+- Easy to obtain the random numbers associated with any object very quickly
+- No storage
 
-galtileID  PNRG-state
-53           <state1>
-27           <state2>
-23           <state3>
-192         <state4>
+### cons:
+- No guarantees on getting independent randoms numbers, though if the seed pool is large compared the number of objects, this is probably safe for the most part. This is the common problem with storing seeds rather than the states in a sequence.
+- With the current python PRNG based on a 32 bit Mersenne Twister, the number of seeds (limited to 32 bit integers) is much smaller than the number of  objects we are interested in. This particular problem can be solved by moving to an algorithm that involves a 64 bit seed.
 
-In that case, we will be reproducible again, we go to a galaxy later on, and read the galtileID, say it is 23. We look up the state
-from this table and find it is <state3> and then we take a PNRG and set its state to <state3> and we can draw the same set of
-random numbers associated with the galaxy. Python (numpy) provides such `set_state`, and `get_state` functionality, and the
-state in question is an object. To serialize, we have two alternatives:
- - need to store the parameters required to instantiate that object.
- - We can store the starting seed and an integer index that specifies the the position in the sequence  for the galaxy, so
+## Approach 2: Store the states of the PRNGs / store the random numbers themselves
+At any time, the PRNG is completely described by a state which is a list of integers. This amounts to adding columns
+on the first example holding either the list of random numbers, or the list of integers to specify the state.
 
-galtileID  position in sequence
-53           1
-27           2
-23           3
-192         4
+ object   PNRG-state
+- 53       state1
+- 27       state2
+- 23       state3
+- 192      state4
 
-For the first method, the problem is specifying the state space for the Mersenne Twister: This has a size of 624 * 32 bits per state.
-For our galaxies, this comes to 5 e10 * 2.5 e3 ~ 125 TB. We can be helped be a different PNRG with a smaller state space, and
-we can do with a period > 2**32 (like the 2**64 periods should be fine for us), rather than the huge period of the Mersenne Twister.
-At the very least though, this would mean a 64 bit integer for every galaxy ~ 5e10 * 8 bytes  = 400 GB, but the state space could
-be larger.
+at a particular object, read the PRNG state, and draw the
+random numbers from there, and this is very fast.
+### pros:
+- Easy to obtain random numbers associated with any object, if the state is stored
+- Uses random number generators correctly, all the generated numbers should follow all the guarantees from the PRNG algorithm.
 
-Second Method:  If we store the position on the sequence we can do this in 4e10 * 64 bytes = 400 GB. But while assigning such
-random numbers is easy, it is a lot harder to look up the random numbers during application. The typical problem will be that during
-an application we will be looking up galaxies
+### cons:
+- Storage of states is too expensive. For the default numpy.random PRNG this is 624 * 4 bytes per object, and we have ~4e10 objects. This can be partially addressed if the state space is small, (for example there are PRNGs with large periods, which have a state specified by a much smaller number of integers), but is unlikely to be less than 8 bytes per object.
+-
+## Approach 3: Jumpaheads:
+Start with a particular seed, and imagine running through the list of objects using the object index to
+define the position of the object in the sequence during an assignment phase. Later on, to obtain the same set of randoms for a particular object, all we need is the initial
+seed and the index of the object.
+### pros:
+- Uses random number generators correctly, all the generated numbers should follow all the guarantees from the PRNG algorithm.
+- No Storage involved
+### cons:
+- Slow: In the slowest way always possible, to obtain the set of randoms associated with object index i, this amounts to starting with the random seed and drawing the first i -1
+randoms to get to the state corresponding to state i. If, we have closeby and ordered indexes for every use-case we will work on, and have large index values, all of which are true for us, this process will be very slow.
+However, it is possible to have more efficient jumpahead algorithms that simply take you to the state of the PRNG corresponding to position 'i' in the sequence for the PRNG with a particular seed.
 
-position in sequence
+## Approach 4: Storing states on a smaller number of objects and using jumpaheads
 
-2343
-7265
-374
-18884
+If we understand that all use-cases that we are concerned only involve sets of object ids, (for example because we will be doing spatial queries of sizes smaller than some limit). we could combine jumpaheads with storing states on one object in each of these sets.
 
-In the dumb, brute-force way this means we start with a seed .... draw 2342 random numbers, and
-get to the state we want for the first galaxy. Then we draw 7265 - (2343 + num_randoms_perGal)
-to get to the state for the second galaxy. Then we reseed and go to 374 etc. So slow.
-
-Finally, we could do away with this cost of storage, if we used the galtileId as the position in the sequence. However, since the
-galtileIDs are not sequential, what we will have to do is go through the above problem even during assignment.
-
-The way to get around this is by asking if there are fast methods for composing the changes to the state of the random number
-by the position in the sequence. This seems to be called 'Jumpahead' in the literature.  So, what we seem to need is :
-
-1. A PNRG with a period of say 2**64
-2. A PNRG with a fast Jumpahead algorithm
-3. If the jumpahead is not easy, we could think of one with a small state space.
+## Approach 5: Dynamic Seed creation + approach 1
