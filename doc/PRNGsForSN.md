@@ -56,7 +56,7 @@ random numbers from there, and this is very fast.
 ### cons:
 
 - Storage of states is too expensive. For the default numpy.random PRNG this is 624 * 4 bytes per object, and we have ~4e10 objects. This can be partially addressed if the state space is small, (for example there are PRNGs with large periods, which have a state specified by a much smaller number of integers), but is unlikely to be less than 8 bytes per object.
--
+
 ## Approach 3: Jumpaheads:
 Start with a particular seed, and imagine running through the list of objects using the object index to
 define the position of the object in the sequence during an assignment phase. Later on, to obtain the same set of randoms for a particular object, all we need is the initial
