@@ -26,10 +26,12 @@ called galtileID, which is currently built from an ID identifying the tile of sp
 In the above example the index is the first column (object). You could imagine seeding the random number generator with these index values, and draw the 20 random numbers corresponding to these objects.
 
 ### pros:
+
 - Easy to obtain the random numbers associated with any object very quickly
 - No storage
 
 ### cons:
+
 - No guarantees on getting independent randoms numbers, though if the seed pool is large compared the number of objects, this is probably safe for the most part. This is the common problem with storing seeds rather than the states in a sequence.
 - With the current python PRNG based on a 32 bit Mersenne Twister, the number of seeds (limited to 32 bit integers) is much smaller than the number of  objects we are interested in. This particular problem can be solved by moving to an algorithm that involves a 64 bit seed.
 
@@ -45,21 +47,28 @@ on the first example holding either the list of random numbers, or the list of i
 
 at a particular object, read the PRNG state, and draw the
 random numbers from there, and this is very fast.
+
 ### pros:
+
 - Easy to obtain random numbers associated with any object, if the state is stored
 - Uses random number generators correctly, all the generated numbers should follow all the guarantees from the PRNG algorithm.
 
 ### cons:
+
 - Storage of states is too expensive. For the default numpy.random PRNG this is 624 * 4 bytes per object, and we have ~4e10 objects. This can be partially addressed if the state space is small, (for example there are PRNGs with large periods, which have a state specified by a much smaller number of integers), but is unlikely to be less than 8 bytes per object.
 -
 ## Approach 3: Jumpaheads:
 Start with a particular seed, and imagine running through the list of objects using the object index to
 define the position of the object in the sequence during an assignment phase. Later on, to obtain the same set of randoms for a particular object, all we need is the initial
 seed and the index of the object.
+
 ### pros:
+
 - Uses random number generators correctly, all the generated numbers should follow all the guarantees from the PRNG algorithm.
 - No Storage involved
+
 ### cons:
+
 - Slow: In the slowest way always possible, to obtain the set of randoms associated with object index i, this amounts to starting with the random seed and drawing the first i -1
 randoms to get to the state corresponding to state i. If, we have closeby and ordered indexes for every use-case we will work on, and have large index values, all of which are true for us, this process will be very slow.
 However, it is possible to have more efficient jumpahead algorithms that simply take you to the state of the PRNG corresponding to position 'i' in the sequence for the PRNG with a particular seed.
